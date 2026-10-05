@@ -1,13 +1,21 @@
 {
-  "name": "Vocab 1528 - Range Mission",
-  "short_name": "Vocab 1528",
+  "name": "Vocab 1528+",
+  "short_name": "Vocab1528+",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#f3f4f6",
-  "theme_color": "#111827",
-  "lang": "ja",
+  "background_color": "#f4f5f7",
+  "theme_color": "#f4f5f7",
   "icons": [
-    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png"},
-    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png"}
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }

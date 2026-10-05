@@ -3,194 +3,219 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#111827" id="themeMeta">
+  <meta name="theme-color" content="#f4f5f7" id="themeColorMeta">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Vocab 1528">
-  <title>Vocab 1528</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Vocab 1528+">
+  <title>Vocab 1528+</title>
+  <script>
+    if ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true) {
+      document.documentElement.classList.add("pwa-standalone");
+    }
+  </script>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">ENGLISH VOCABULARY</div>
-        <h1>Vocab 1528</h1>
-      </div>
-      <div class="top-actions">
-        <button class="accent-dot" id="rerollAccentBtn" aria-label="差し色を変える" title="差し色を変える"></button>
-        <button class="icon-btn" id="themeBtn" aria-label="テーマ切替">◐</button>
-      </div>
-    </header>
+<div id="app">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">ENGLISH VOCABULARY</div>
+      <h1>Vocab 1528+</h1>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn accent-dot" id="accentBtn" aria-label="差し色を変える"><i></i></button>
+      <button class="icon-btn" id="themeBtn" aria-label="テーマ切替">◐</button>
+    </div>
+  </header>
 
-    <main>
-      <section class="view active" id="homeView">
-        <div class="hero card">
+  <main>
+    <section class="view active" id="homeView">
+      <div class="hero card">
+        <div>
+          <div class="eyebrow">RANGE MISSION</div>
+          <h2><span id="overallPct">0</span>%</h2>
+          <p><b id="earnedHits">0</b> / <span id="totalHits">0</span> 正解 · <span id="heroRange">1–1528</span></p>
+        </div>
+        <div class="ring" id="progressRing"><span id="ringPct">0%</span></div>
+      </div>
+
+      <div class="card section-card mode-card">
+        <div class="section-head compact-head">
+          <div><div class="eyebrow">QUESTION MODE</div><h3>出題モード</h3></div>
+          <span class="accent-chip" id="modeHint">ごちゃまぜ</span>
+        </div>
+        <div class="segmented" id="modeSegment">
+          <button data-mode="en-ja">英 → 日</button>
+          <button data-mode="ja-en">日 → 英</button>
+          <button data-mode="mixed" class="active">ごちゃまぜ</button>
+        </div>
+        <p class="tiny">3モードで進捗は共通です。ごちゃまぜは英→日・日→英が偏りすぎないように出題します。</p>
+      </div>
+
+      <div class="stat-grid four">
+        <div class="stat card"><b id="clearedUnits">0</b><span>意味クリア</span></div>
+        <div class="stat card"><b id="rangeUnits">0</b><span>範囲内の意味</span></div>
+        <div class="stat card"><b id="remainingHits">0</b><span>残り正解</span></div>
+        <div class="stat card"><b id="streakCount">0</b><span>連続学習日</span></div>
+      </div>
+
+      <div class="card section-card mission-card">
+        <div class="section-head">
+          <div><div class="eyebrow">ONE DAILY MISSION</div><h3>学習範囲と今日のノルマ</h3></div>
+          <span class="status-pill" id="paceStatus">未設定</span>
+        </div>
+
+        <label class="preset-label">100語区切り
+          <select id="rangePreset"></select>
+        </label>
+        <div class="range-grid">
+          <label>開始番号<input id="rangeStart" type="number" min="1" max="1528" inputmode="numeric"></label>
+          <div class="range-sep">–</div>
+          <label>終了番号<input id="rangeEnd" type="number" min="1" max="1528" inputmode="numeric"></label>
+        </div>
+        <div class="range-summary"><b id="rangeWordCount">1528</b>項目 · <b id="rangeMeaningCount">2187</b>意味 · 3回正解で <b id="rangeTotalHits">6561</b> 正解</div>
+
+        <div class="plan-grid">
+          <label>この範囲の目標日<input id="targetDate" type="date"></label>
+          <label>1日のノルマ<input id="dailyQuota" type="number" min="1" max="5000" value="100"><small>有効正解 / 日</small></label>
+        </div>
+        <div class="plan-summary">
+          <div><span>目標日まで</span><b id="daysLeft">—</b><small>日</small></div>
+          <div><span>残り</span><b id="planRemaining">0</b><small>正解</small></div>
+          <div><span>必要ペース</span><b id="neededPerDay">—</b><small>正解/日</small></div>
+        </div>
+        <div class="daily-goal-row">
           <div>
-            <div class="eyebrow">RANGE MISSION</div>
-            <h2><span id="overallPct">0</span>%</h2>
-            <p><b id="earnedHits">0</b> / <span id="totalHits">0</span> 正解 · <span id="heroRange">1–1528</span></p>
+            <b>今日 <span id="todayHits">0</span> / <span id="todayQuotaText">100</span> 正解</b>
+            <div class="bar tall"><i id="dailyGoalBar"></i></div>
           </div>
-          <div class="ring" id="progressRing"><span id="ringPct">0%</span></div>
+          <button class="secondary compact" id="autoQuotaBtn">目標日から自動設定</button>
         </div>
+        <button class="primary giant" id="startMissionBtn">今日のノルマを始める</button>
+        <p class="tiny" id="planHint">括弧の外側のカンマで意味を分け、1意味につき3回正解するとクリアです。</p>
+      </div>
 
-        <div class="stat-grid four">
-          <div class="stat card"><b id="clearedUnits">0</b><span>意味クリア</span></div>
-          <div class="stat card"><b id="rangeUnits">0</b><span>範囲内の意味</span></div>
-          <div class="stat card"><b id="remainingHits">0</b><span>残り正解</span></div>
-          <div class="stat card"><b id="streakCount">0</b><span>連続学習日</span></div>
+      <div class="card section-card">
+        <div class="section-head"><div><div class="eyebrow">ONE FLOW</div><h3>この1つだけ進めればOK</h3></div></div>
+        <div class="flow-list">
+          <div><b>1</b><span>選択範囲から、まだ3回正解していない意味を自動出題。</span></div>
+          <div><b>2</b><span>括弧の外側のカンマで意味を分割。括弧内のカンマは1つの意味として保持。</span></div>
+          <div><b>3</b><span>解答後は外れ3択にも対応する英語／日本語を表示。誤答も復習材料にします。</span></div>
+          <div><b>4</b><span>不正解は4〜6問後に再出題。差し色は起動ごとにランダムです。</span></div>
         </div>
+      </div>
 
-        <div class="card section-card mission-card">
-          <div class="section-head">
-            <div><div class="eyebrow">ONE DAILY MISSION</div><h3>学習範囲と今日のノルマ</h3></div>
-            <span class="status-pill" id="paceStatus">未設定</span>
-          </div>
-
-          <label class="preset-label">100語区切り
-            <select id="rangePreset"></select>
-          </label>
-          <div class="range-grid">
-            <label>開始番号<input id="rangeStart" type="number" min="1" max="1528" inputmode="numeric"></label>
-            <div class="range-sep">–</div>
-            <label>終了番号<input id="rangeEnd" type="number" min="1" max="1528" inputmode="numeric"></label>
-          </div>
-          <div class="range-summary"><b id="rangeWordCount">1528</b>項目 · <b id="rangeMeaningCount">2187</b>意味 · 3回正解で <b id="rangeTotalHits">6561</b> 正解</div>
-
-          <div class="plan-grid">
-            <label>この範囲の目標日<input id="targetDate" type="date"></label>
-            <label>1日のノルマ<input id="dailyQuota" type="number" min="1" max="5000" value="100"><small>有効正解 / 日</small></label>
-          </div>
-          <div class="plan-summary">
-            <div><span>目標日まで</span><b id="daysLeft">—</b><small>日</small></div>
-            <div><span>残り</span><b id="planRemaining">0</b><small>正解</small></div>
-            <div><span>必要ペース</span><b id="neededPerDay">—</b><small>正解/日</small></div>
-          </div>
-          <div class="daily-goal-row">
-            <div>
-              <b>今日 <span id="todayHits">0</span> / <span id="todayQuotaText">100</span> 正解</b>
-              <div class="bar tall"><i id="dailyGoalBar"></i></div>
-            </div>
-            <button class="secondary compact" id="autoQuotaBtn">目標日から自動設定</button>
-          </div>
-          <button class="primary giant" id="startMissionBtn">今日のノルマを始める</button>
-          <p class="tiny" id="planHint">括弧の外側のカンマで意味を分け、1意味につき3回正解するとクリアです。</p>
+      <div class="card section-card">
+        <div class="section-head"><div><div class="eyebrow">DATA</div><h3>学習データ</h3></div></div>
+        <div class="data-actions">
+          <button class="secondary" id="exportBtn">進捗を書き出す</button>
+          <label class="secondary file-label">進捗を読み込む<input id="importInput" type="file" accept="application/json"></label>
+          <button class="danger ghost" id="resetBtn">進捗をリセット</button>
         </div>
+        <p class="tiny">旧Vocab 1528と同じ保存キーを使うため、同じGitHub PagesのURLを上書きすれば以前の進捗を引き継げます。</p>
+      </div>
+    </section>
 
-        <div class="card section-card">
-          <div class="section-head"><div><div class="eyebrow">HOW IT WORKS</div><h3>この1つだけ進めればOK</h3></div></div>
-          <div class="flow-list">
-            <div><b>1</b><span>選んだ番号範囲から、まだ3回正解していない意味をランダム出題。</span></div>
-            <div><b>2</b><span>カンマ区切りの意味は別々の学習単位。同じ英単語の別の意味は同じ4択に出しません。</span></div>
-            <div><b>3</b><span>不正解は減点せず、4〜6問ほど後に自動再出題。苦手な意味は少し出やすくなります。</span></div>
-            <div><b>4</b><span>差し色は起動するたびランダム。右上の色の丸を押せば、その場でも引き直せます。</span></div>
-          </div>
-        </div>
-
-        <div class="card section-card">
-          <div class="section-head"><div><div class="eyebrow">DATA</div><h3>学習データ</h3></div></div>
-          <div class="data-actions">
-            <button class="secondary" id="exportBtn">進捗を書き出す</button>
-            <label class="secondary file-label">進捗を読み込む<input id="importInput" type="file" accept="application/json"></label>
-            <button class="danger ghost" id="resetBtn">進捗をリセット</button>
-          </div>
-          <p class="tiny">学習記録はこの端末のブラウザ内だけに保存されます。範囲を変えても、それまでの各意味の進捗は残ります。</p>
-        </div>
-      </section>
-
-      <section class="view" id="missionView">
-        <div class="study-top">
-          <button class="back-btn" data-go="home">‹</button>
-          <div class="study-progress">
-            今日 <b><span id="missionTodayHits">0</span> / <span id="missionQuota">100</span></b> 正解
+    <section class="view mission-overlay" id="missionView">
+      <div class="mission-shell">
+        <div class="mission-head">
+          <button class="back-btn" data-go="home" aria-label="戻る">‹</button>
+          <div class="mission-meter">
+            <div><span id="directionBadge" class="direction-badge">英 → 日</span> 今日 <b><span id="missionTodayHits">0</span>/<span id="missionQuota">100</span></b></div>
             <div class="bar"><i id="missionBar"></i></div>
           </div>
           <button class="icon-btn" id="missionStarBtn" aria-label="お気に入り">☆</button>
         </div>
 
-        <div class="session-banner"><span id="missionRange">1–1528</span> · あと <span id="missionRemaining">0</span> 正解で範囲クリア</div>
-        <div class="quiz-card card">
-          <div class="question-meta">
-            <div class="word-no" id="missionWordNo">No. 1</div>
-            <div class="hit-pill" id="senseHit">0 / 3</div>
+        <div class="quiz-panel card">
+          <div class="question-row">
+            <span id="missionWordNo">No. 1</span>
+            <span id="senseLabel"></span>
+            <span class="hit-pill" id="senseHit">0 / 3</span>
           </div>
-          <div class="sense-label hidden" id="senseLabel"></div>
-          <div class="quiz-prompt" id="missionPrompt">word</div>
-          <button class="speak-btn" id="missionSpeakBtn">🔊 発音</button>
-          <div id="missionChoices" class="choices"></div>
-          <div id="missionFeedback" class="feedback hidden"></div>
-          <button class="primary hidden" id="nextMissionBtn">次の問題</button>
-        </div>
-        <div class="session-stats">
-          <div><span>連続正解</span><b id="comboCount">0</b></div>
-          <div><span>今日の回答</span><b id="todayAnswered">0</b></div>
-          <div><span>今日の正答率</span><b id="todayAccuracy">—</b></div>
-        </div>
-      </section>
 
-      <section class="view" id="completeView">
-        <div class="complete-card card">
-          <div class="complete-icon">✓</div>
-          <div class="eyebrow">TODAY COMPLETE</div>
-          <h2>今日のノルマ達成</h2>
-          <p><b id="completeTodayHits">0</b> 正解まで進みました。</p>
-          <div class="complete-grid">
-            <div><b id="completeRemaining">0</b><span>範囲クリアまで</span></div>
-            <div><b id="completeUnits">0</b><span>意味クリア</span></div>
-            <div><b id="completeRange">—</b><span>学習範囲</span></div>
+          <div class="prompt-zone">
+            <div class="quiz-prompt" id="missionPrompt">word</div>
+            <button class="speak-btn" id="missionSpeakBtn">🔊 読み上げ</button>
           </div>
-          <button class="primary" id="continueMissionBtn">もう少し続ける</button>
-          <button class="secondary" data-go="home">今日はここまで</button>
-        </div>
-      </section>
 
-      <section class="view" id="searchView">
-        <div class="search-box card"><input id="searchInput" type="search" placeholder="英単語・日本語で検索"></div>
-        <div id="searchResults" class="word-list"></div>
-      </section>
+          <div id="missionChoices" class="choices-grid"></div>
 
-      <section class="view" id="statsView">
-        <div class="card section-card">
-          <div class="eyebrow">CURRENT RANGE</div><h3 id="statsRangeTitle">範囲 1–1528</h3>
-          <div class="big-stats">
-            <div><b id="statsHits">0</b><span>有効正解</span></div>
-            <div><b id="statsClearedUnits">0</b><span>意味クリア</span></div>
-            <div><b id="statsRemaining">0</b><span>残り正解</span></div>
-          </div>
-          <div class="distribution" id="hitDistribution"></div>
+          <div id="missionFeedback" class="feedback-strip neutral">1つ選んでください</div>
+          <button class="primary next-fixed" id="nextMissionBtn" disabled>選択してください</button>
         </div>
-        <div class="card section-card">
-          <div class="eyebrow">CONSISTENCY</div><h3>継続</h3>
-          <div class="big-stats">
-            <div><b id="statsStreak">0</b><span>連続学習日</span></div>
-            <div><b id="statsToday">0</b><span>今日の正解</span></div>
-            <div><b id="statsAccuracy">—</b><span>累計正答率</span></div>
-          </div>
-          <div id="weekStrip" class="week-strip"></div>
-        </div>
-        <div class="card section-card">
-          <div class="eyebrow">AUTO REVIEW</div><h3>間違えやすい意味</h3>
-          <p class="tiny stats-copy">別モードではありません。「今日の学習」の中で自動的に少し優先されます。</p>
-          <div id="hardList" class="hard-list"></div>
-        </div>
-        <div class="card section-card">
-          <div class="eyebrow">BY 100</div><h3>100項目ごとの完全クリア率</h3>
-          <div id="chunkStats" class="chunk-stats"></div>
-        </div>
-      </section>
-    </main>
 
-    <nav class="bottom-nav three">
-      <button data-view="home" class="active"><span>⌂</span>学習</button>
-      <button data-view="search"><span>⌕</span>単語一覧</button>
-      <button data-view="stats"><span>≡</span>記録</button>
-    </nav>
-  </div>
-  <div class="toast" id="toast"></div>
-  <script src="words.js"></script>
-  <script src="app.js"></script>
+        <div class="mission-foot">
+          <span>範囲 <b id="missionRange">1–1528</b></span>
+          <span>残り <b id="missionRemaining">0</b></span>
+          <span>正答率 <b id="todayAccuracy">—</b></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="completeView">
+      <div class="complete-card card">
+        <div class="complete-icon">✓</div>
+        <div class="eyebrow">TODAY COMPLETE</div>
+        <h2>今日のノルマ達成</h2>
+        <p><b id="completeTodayHits">0</b> 正解まで進みました。</p>
+        <div class="complete-grid">
+          <div><b id="completeRemaining">0</b><span>範囲クリアまで</span></div>
+          <div><b id="completeUnits">0</b><span>意味クリア</span></div>
+          <div><b id="completeRange">—</b><span>学習範囲</span></div>
+        </div>
+        <button class="primary" id="continueMissionBtn">もう少し続ける</button>
+        <button class="secondary" data-go="home">今日はここまで</button>
+      </div>
+    </section>
+
+    <section class="view" id="searchView">
+      <div class="search-box card"><input id="searchInput" type="search" placeholder="英単語・日本語で検索"></div>
+      <div id="searchResults" class="word-list"></div>
+    </section>
+
+    <section class="view" id="statsView">
+      <div class="card section-card">
+        <div class="eyebrow">CURRENT RANGE</div><h3 id="statsRangeTitle">範囲 1–1528</h3>
+        <div class="big-stats">
+          <div><b id="statsHits">0</b><span>有効正解</span></div>
+          <div><b id="statsClearedUnits">0</b><span>意味クリア</span></div>
+          <div><b id="statsRemaining">0</b><span>残り正解</span></div>
+        </div>
+        <div class="distribution" id="hitDistribution"></div>
+      </div>
+      <div class="card section-card">
+        <div class="eyebrow">CONSISTENCY</div><h3>継続</h3>
+        <div class="big-stats">
+          <div><b id="statsStreak">0</b><span>連続学習日</span></div>
+          <div><b id="statsToday">0</b><span>今日の正解</span></div>
+          <div><b id="statsAccuracy">—</b><span>累計正答率</span></div>
+        </div>
+        <div id="weekStrip" class="week-strip"></div>
+      </div>
+      <div class="card section-card">
+        <div class="eyebrow">AUTO REVIEW</div><h3>間違えやすい意味</h3>
+        <p class="tiny stats-copy">別モードではありません。「今日の学習」の中で自動的に少し優先されます。</p>
+        <div id="hardList" class="hard-list"></div>
+      </div>
+      <div class="card section-card">
+        <div class="eyebrow">BY 100</div><h3>100項目ごとの完全クリア率</h3>
+        <div id="chunkStats" class="chunk-stats"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav three">
+    <button data-view="home" class="active"><span>⌂</span>学習</button>
+    <button data-view="search"><span>⌕</span>単語一覧</button>
+    <button data-view="stats"><span>≡</span>記録</button>
+  </nav>
+</div>
+<div class="toast" id="toast"></div>
+<script src="words.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
