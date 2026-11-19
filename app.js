@@ -4,6 +4,7 @@ const SETTINGS_KEY = "vocab1528-settings-v1";
 const ACTIVITY_KEY = "vocab1528-activity-v1";
 const STARS_KEY = "vocab1528-stars-v1";
 const LAST_ACCENT_KEY = "vocab1528-last-accent-v2";
+const TEST_KEY = "vocab1528-testprep-v1"; // independent from 3-hit progress
 const DAY = 86400000;
 const IS_STANDALONE = !!((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true);
 document.documentElement.classList.toggle("pwa-standalone", IS_STANDALONE);
@@ -31,6 +32,18 @@ settings.rangeEnd = clamp(parseInt(settings.rangeEnd)||MAX_WORD_ID, 1, MAX_WORD_
 if(settings.rangeStart > settings.rangeEnd) [settings.rangeStart, settings.rangeEnd] = [settings.rangeEnd, settings.rangeStart];
 settings.dailyQuota = clamp(parseInt(settings.dailyQuota)||100, 1, 5000);
 if(!settings.plans || typeof settings.plans !== "object") settings.plans = {};
+
+let testStore = loadJSON(TEST_KEY, {});
+if(!testStore || typeof testStore !== "object" || Array.isArray(testStore)) testStore = {};
+if(!testStore.config || typeof testStore.config !== "object") testStore.config = {};
+testStore.config = Object.assign({start:settings.rangeStart,end:settings.rangeEnd,mode:"mixed"},testStore.config);
+if(!Array.isArray(testStore.history)) testStore.history = [];
+if(!testStore.active || typeof testStore.active !== "object") testStore.active = null;
+let testCurrentUnit = null;
+let testCurrentDirection = "en-ja";
+let testAnswered = false;
+let unitById = new Map();
+
 
 let ALL_UNITS = [];
 let activeUnits = [];
@@ -119,6 +132,7 @@ function buildUnits(){
     const senses=splitMeanings(w.meaning);
     senses.forEach((meaning,index)=>ALL_UNITS.push({ id:`${w.id}:${index+1}`, w, meaning, index, count:senses.length }));
   }
+  unitById = new Map(ALL_UNITS.map(u=>[u.id,u]));
   refreshActiveUnits();
 }
 function refreshActiveUnits(){ activeUnits=ALL_UNITS.filter(u=>u.w.id>=settings.rangeStart && u.w.id<=settings.rangeEnd); }
@@ -226,10 +240,10 @@ function autoQuota(){
 }
 function go(view){
   $$(".view").forEach(v=>v.classList.remove("active")); const el=$(`#${view}View`); if(el)el.classList.add("active");
-  document.body.classList.toggle("quiz-open",view==="mission"); if(view==="mission")scheduleViewportSync();
-  $$(".bottom-nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
-  if(view!=="mission") window.scrollTo({top:0,behavior:"instant"});
-  if(view==="home")refreshHome(); if(view==="search")renderSearch(); if(view==="stats")renderStats();
+  document.body.classList.toggle("quiz-open",view==="mission"||view==="testQuiz"); if(view==="mission"||view==="testQuiz")scheduleViewportSync();
+  $$(".bottom-nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===(view==="testQuiz"?"test":view)));
+  if(view!=="mission"&&view!=="testQuiz") window.scrollTo({top:0,behavior:"instant"});
+  if(view==="home")refreshHome(); if(view==="test")refreshTestView(); if(view==="search")renderSearch(); if(view==="stats")renderStats();
 }
 
 function normalizeMeaning(s){
@@ -246,29 +260,22 @@ function meaningsOverlap(a,b){
   let shared=0; for(const x of A) if(B.includes(x))shared++;
   return shared/Math.min(A.length,B.length)>=0.55;
 }
-function distractorsFor(unit,direction){
-  const targetWord=normalizedWord(unit.w.word);
-  const pickFrom=source=>{
-    const candidates=shuffle(source.filter(u=>u.id!==unit.id && u.w.id!==unit.w.id && normalizedWord(u.w.word)!==targetWord && !meaningsOverlap(u.meaning,unit.meaning)));
-    const picked=[], usedWords=new Set(), usedMeanings=[];
-    for(const c of candidates){
-      const w=normalizedWord(c.w.word);
-      if(direction==="ja-en" && usedWords.has(w))continue;
-      if(direction==="en-ja" && usedMeanings.some(x=>meaningsOverlap(x,c.meaning)))continue;
-      picked.push(c); usedWords.add(w); usedMeanings.push(c.meaning);
+function distractorsFor(unit,direction,primaryPool=activeUnits,secondaryPool=ALL_UNITS){
+  const targetWord=normalizedWord(unit.w.word),picked=[],usedWords=new Set(),usedMeanings=[];
+  function addFrom(pool){
+    for(const c of shuffle(pool)){
+      if(c.id===unit.id || c.w.id===unit.w.id || normalizedWord(c.w.word)===targetWord || meaningsOverlap(c.meaning,unit.meaning))continue;
+      if(picked.some(x=>x.id===c.id) || usedWords.has(normalizedWord(c.w.word)))continue;
+      if(usedMeanings.some(x=>meaningsOverlap(x,c.meaning)))continue;
+      picked.push(c);usedWords.add(normalizedWord(c.w.word));usedMeanings.push(c.meaning);
       if(picked.length===3)break;
     }
-    return picked;
-  };
-  let picked=pickFrom(activeUnits);
-  if(picked.length<3){
-    const used=new Set(picked.map(x=>x.id));
-    for(const c of pickFrom(ALL_UNITS)){
-      if(!used.has(c.id)){ picked.push(c); used.add(c.id); if(picked.length===3)break; }
-    }
   }
+  addFrom(primaryPool);
+  if(picked.length<3)addFrom(secondaryPool);
   return picked;
 }
+
 function weightedRandom(pool){
   let total=0; const weighted=pool.map(u=>{ const h=getHits(u),w=1+Math.min(4,unitWrong(u)*.55)+h*.18; total+=w; return [u,total]; });
   const r=Math.random()*total; return weighted.find(([,cum])=>r<cum)?.[0]||pool[0];
@@ -414,7 +421,7 @@ function renderStats(){
 }
 function exportProgress(){
   savePlanForCurrentRange(); persist();
-  const payload={version:2,book:"vocab1528",exportedAt:new Date().toISOString(),progress,settings,activity,stars};
+  const payload={version:3,book:"vocab1528",exportedAt:new Date().toISOString(),progress,settings,activity,stars,testStore};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=url;a.download=`vocab1528-plus-progress-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
@@ -424,14 +431,287 @@ async function importProgress(file){
     progress=j.progress; activity=(j.activity&&typeof j.activity==="object")?j.activity:{}; stars=(j.stars&&typeof j.stars==="object")?j.stars:{}; settings=Object.assign(settings,j.settings||{});
     settings.rangeStart=clamp(parseInt(settings.rangeStart)||1,1,MAX_WORD_ID);settings.rangeEnd=clamp(parseInt(settings.rangeEnd)||MAX_WORD_ID,1,MAX_WORD_ID);if(settings.rangeStart>settings.rangeEnd)[settings.rangeStart,settings.rangeEnd]=[settings.rangeEnd,settings.rangeStart];
     settings.dailyQuota=clamp(parseInt(settings.dailyQuota)||100,1,5000);if(!settings.plans||typeof settings.plans!=="object")settings.plans={};if(!["en-ja","ja-en","mixed"].includes(settings.mode))settings.mode="mixed";
+    if(j.testStore && typeof j.testStore==="object" && !Array.isArray(j.testStore)){
+      testStore=j.testStore;
+      if(!testStore.config||typeof testStore.config!=="object")testStore.config={start:1,end:MAX_WORD_ID,mode:"mixed"};
+      if(!Array.isArray(testStore.history))testStore.history=[];
+      if(!testStore.active||typeof testStore.active!=="object")testStore.active=null;
+      persistTest();
+    }
     refreshActiveUnits();persist();refreshHome();toast("進捗を読み込みました");
   }catch{toast("この単語帳の進捗データではありません")}
 }
 function resetProgress(){
-  if(confirm("この単語帳のすべての学習記録をリセットしますか？")){
+  if(confirm("通常学習の3回正解記録・学習履歴をリセットしますか？（テスト前の記録は残ります）")){
     progress={};activity={};stars={};localStorage.removeItem(PROGRESS_KEY);localStorage.removeItem(ACTIVITY_KEY);localStorage.removeItem(STARS_KEY);persist();refreshHome();toast("リセットしました");
   }
 }
+
+// --------------------- Test preparation: shrinking rounds ---------------------
+// Every No. in the selected range is asked once per round. A correct answer
+// permanently clears that No. for the current test. Only misses enter the next
+// round. Select one meaning afresh for EACH appearance (first meaning: 70%).
+// The complete current round and unanswered question are persisted separately
+// from normal 3-hit vocabulary study.
+function persistTest(){
+  try{localStorage.setItem(TEST_KEY,JSON.stringify(testStore));}
+  catch(e){toast("保存容量が不足しています。バックアップをご利用ください");}
+}
+function testConfigSafe(){
+  const c=testStore.config;
+  c.start=clamp(Number.parseInt(c.start)||1,1,MAX_WORD_ID);
+  c.end=clamp(Number.parseInt(c.end)||MAX_WORD_ID,1,MAX_WORD_ID);
+  if(c.start>c.end)[c.start,c.end]=[c.end,c.start];
+  if(!["en-ja","ja-en","mixed"].includes(c.mode))c.mode="mixed";
+  return c;
+}
+function testRangeUnits(c=testConfigSafe()){
+  return ALL_UNITS.filter(u=>u.w.id>=c.start&&u.w.id<=c.end);
+}
+function testClearedSet(session=testStore.active){return new Set(session?.clearedWordIds||[]);}
+// Convert an unfinished v3/v4 test without discarding its cleared words or
+// accuracy totals. Previously presented-but-uncleared words begin in one queue.
+function ensureTestSession(s){
+  if(!s||s.selectionType==="rounds-per-word")return s;
+  const ids=Array.isArray(s.unitIds)?s.unitIds:[];
+  const wordIds=[...new Set(ids.map(x=>Number.parseInt(String(x).split(":")[0],10)).filter(id=>Number.isInteger(id)&&id>=1&&id<=MAX_WORD_ID))];
+  const cleared=new Set((s.clearedIds||[]).map(x=>Number.parseInt(String(x).split(":")[0],10)));
+  s.wordIds=wordIds;
+  s.clearedWordIds=wordIds.filter(id=>cleared.has(id));
+  s.roundQueue=shuffle(wordIds.filter(id=>!cleared.has(id)));
+  s.roundMissed=[];s.roundNumber=1;s.roundSize=s.roundQueue.length;
+  s.roundDone=0;s.roundHistory=[];
+  s.currentWordId=null;s.currentUnitId=null;s.currentDirection=null;s.currentAnswered=false;
+  s.selectionType="rounds-per-word";
+  s.migratedFromOlderTest=true;
+  persistTest();
+  return s;
+}
+function testSummary(session){
+  const total=(session.wordIds||session.unitIds||[]).length;
+  const cleared=(session.clearedWordIds||session.clearedIds||[]).length;
+  return {id:session.id,createdAt:session.createdAt,finishedAt:session.finishedAt||null,abandonedAt:session.abandonedAt||null,
+    selectionType:session.selectionType||"legacy-meaning-sample",
+    start:session.start,end:session.end,mode:session.mode,total,cleared,
+    roundNumber:session.roundNumber||null,roundSize:session.roundSize||null,roundDone:session.roundDone||0,
+    roundHistory:Array.isArray(session.roundHistory)?session.roundHistory:[],
+    correct:session.correct||0,wrong:session.wrong||0,
+    accuracy:(session.answers?Math.round((session.correct||0)/session.answers*100):null)};
+}
+function testPresetBuild(){
+  let html=`<option value="custom">自由指定</option><option value="1-${MAX_WORD_ID}">全範囲 1–${MAX_WORD_ID}</option>`;
+  for(let i=1;i<=MAX_WORD_ID;i+=100)html+=`<option value="${i}-${Math.min(MAX_WORD_ID,i+99)}">${i}–${Math.min(MAX_WORD_ID,i+99)}</option>`;
+  $("#testRangePreset").innerHTML=html;
+}
+function testPreview(){
+  const a=clamp(Number.parseInt($("#testRangeStart").value)||1,1,MAX_WORD_ID),
+        b=clamp(Number.parseInt($("#testRangeEnd").value)||MAX_WORD_ID,1,MAX_WORD_ID);
+  const start=Math.min(a,b),end=Math.max(a,b);
+  const total=WORDS.filter(w=>w.id>=start&&w.id<=end).length;
+  $("#testAvailableLabel").textContent=`No. ${start}–${end} · 1周目 ${total.toLocaleString()}問（以後は不正解だけ）`;
+  const key=`${start}-${end}`;
+  $("#testRangePreset").value=[...$("#testRangePreset").options].some(x=>x.value===key)?key:"custom";
+}
+// Called every time the word is about to appear, including on a later round.
+function chooseTestSense(units){
+  if(!units.length)return null;
+  if(units.length===1||Math.random()<0.70)return units[0];
+  return units[1+Math.floor(Math.random()*(units.length-1))];
+}
+function testWordUnits(wordId){return ALL_UNITS.filter(u=>u.w.id===wordId);}
+function refreshTestView(){
+  const c=testConfigSafe(),s=ensureTestSession(testStore.active);
+  $("#testRangeStart").value=c.start;$("#testRangeEnd").value=c.end;
+  $$("#testModeSegment button").forEach(b=>b.classList.toggle("active",b.dataset.testMode===c.mode));
+  testPreview();
+  const panel=$("#testCurrentPanel");panel.classList.toggle("hidden",!s);
+  if(s){
+    const sum=testSummary(s),pct=sum.total?Math.round(sum.cleared/sum.total*100):0;
+    $("#testCurrentTitle").textContent=sum.finishedAt?"テスト完了！":"進行中のテスト";
+    $("#testStateTag").textContent=sum.finishedAt?"全問クリア":"途中から再開OK";
+    $("#testStateTag").className=`status-pill ${sum.finishedAt?"good":""}`;
+    $("#testCurrentInfo").textContent=`No. ${sum.start}–${sum.end} · ${modeText(sum.mode)} · ${sum.total}問 · ${new Date(sum.createdAt).toLocaleDateString("ja-JP")}`;
+    $("#testCurrentPct").textContent=`${pct}%`;$("#testCurrentBar").style.width=`${pct}%`;
+    $("#testCleared").textContent=sum.cleared;$("#testLeft").textContent=sum.total-sum.cleared;$("#testWrong").textContent=sum.wrong;
+    const roundMsg=sum.finishedAt?`${sum.roundNumber||1}周で全問クリア`:`第${sum.roundNumber||1}周 · ${sum.roundDone||0}/${sum.roundSize||0}問 回答済み`;
+    $("#testCurrentAccuracy").textContent=`${roundMsg} · 累計回答 ${sum.correct+sum.wrong}回 · 正答率 ${sum.accuracy==null?"—":sum.accuracy+"%"}`;
+    $("#testRoundHistory").textContent=(sum.roundHistory||[]).length?
+      `周回の記録：${sum.roundHistory.map(x=>`${x.number}周目 ${x.total}問 → 不正解${x.missed}問`).join(" ／ ")}`:"1周目は指定した範囲の全単語を1回ずつ出題します。";
+    $("#resumeTestBtn").classList.toggle("hidden",!!sum.finishedAt);
+    $("#resumeTestBtn").textContent=`残り${sum.total-sum.cleared}問 · 続きから学習する`;
+  }
+  const all=[];if(s)all.push(testSummary(s));all.push(...testStore.history);
+  $("#testHistory").innerHTML=all.length?all.slice(0,12).map((t,i)=>{
+    const pct=t.total?Math.round(t.cleared/t.total*100):0;
+    const status=t.finishedAt?"完了":t.abandonedAt?"途中で終了":"進行中";
+    const rounds=t.roundNumber?` · ${t.roundNumber}周目`:"";
+    return `<div class="test-history-item"><div class="test-history-top"><b>${i===0&&s?"現在のテスト":escapeHTML(new Date(t.createdAt).toLocaleDateString("ja-JP"))} · ${escapeHTML(status)}</b><span>${t.cleared}/${t.total}問 · ${pct}%</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="test-history-info">No. ${t.start}–${t.end} · ${modeText(t.mode)}${rounds} · 正答 ${t.correct} / 誤答 ${t.wrong}</div></div>`;
+  }).join(""):`<p class="tiny">まだテスト記録がありません。番号の範囲を指定して始めましょう。</p>`;
+}
+function saveTestConfigFromUI(){
+  const c=testStore.config;
+  c.start=clamp(Number.parseInt($("#testRangeStart").value)||1,1,MAX_WORD_ID);
+  c.end=clamp(Number.parseInt($("#testRangeEnd").value)||MAX_WORD_ID,1,MAX_WORD_ID);
+  if(c.start>c.end)[c.start,c.end]=[c.end,c.start];
+  testPreview();persistTest();return c;
+}
+function createTest(){
+  const c=saveTestConfigFromUI();
+  const ids=WORDS.filter(w=>w.id>=c.start&&w.id<=c.end).map(w=>w.id);
+  if(!ids.length){toast("この範囲に問題がありません");return;}
+  if(testStore.active && !testStore.active.finishedAt && !confirm("進行中のテストを終了して、新しいテストを作成しますか？\nこれまでの結果は履歴に残ります。"))return;
+  if(testStore.active){
+    ensureTestSession(testStore.active);
+    if(!testStore.active.finishedAt)testStore.active.abandonedAt=new Date().toISOString();
+    testStore.history.unshift(testSummary(testStore.active));
+    testStore.history=testStore.history.slice(0,30);
+  }
+  testStore.active={
+    id:`${Date.now()}-${Math.floor(Math.random()*1e6)}`,
+    start:c.start,end:c.end,mode:c.mode,selectionType:"rounds-per-word",
+    createdAt:new Date().toISOString(),finishedAt:null,
+    wordIds:ids,clearedWordIds:[],answers:0,correct:0,wrong:0,mistakes:{},
+    roundNumber:1,roundSize:ids.length,roundDone:0,
+    roundQueue:shuffle(ids),roundMissed:[],roundHistory:[],
+    currentWordId:null,currentUnitId:null,currentDirection:null,currentAnswered:false,
+    recentDirections:[]
+  };
+  persistTest();openTestQuiz();
+}
+function openTestQuiz(){
+  const s=ensureTestSession(testStore.active);
+  if(!s){toast("先にテストを作成してください");return;}
+  if(s.finishedAt){go("test");return;}
+  go("testQuiz");
+  // Reopen an unanswered question without counting it twice or rerolling it.
+  if(s.currentWordId!=null&&!s.currentAnswered&&unitById.has(s.currentUnitId)){
+    testCurrentUnit=unitById.get(s.currentUnitId);
+    testCurrentDirection=s.currentDirection||"en-ja";testAnswered=false;
+    renderTestQuestion();return;
+  }
+  nextTestQuestion();
+}
+function nextTestDirection(s){
+  if(s.mode!=="mixed")return s.mode;
+  const a=s.recentDirections||[];
+  if(a.length>=2&&a.at(-1)===a.at(-2))return a.at(-1)==="en-ja"?"ja-en":"en-ja";
+  if(a.length&&Math.random()<.45)return a.at(-1)==="en-ja"?"ja-en":"en-ja";
+  return Math.random()<.5?"en-ja":"ja-en";
+}
+function beginNextTestRound(s){
+  if(s.roundQueue.length)return true;
+  // One round ends only when every selected No. has had one answer.
+  if(s.roundDone>0){
+    const misses=s.roundMissed.length;
+    s.roundHistory.push({number:s.roundNumber,total:s.roundSize,missed:misses});
+    if(s.roundHistory.length>30)s.roundHistory=s.roundHistory.slice(-30);
+  }
+  if(!s.roundMissed.length)return false;
+  s.roundNumber++;
+  s.roundQueue=shuffle(s.roundMissed);
+  s.roundSize=s.roundQueue.length;
+  s.roundDone=0;s.roundMissed=[];
+  persistTest();return true;
+}
+function nextTestQuestion(){
+  const s=ensureTestSession(testStore.active);
+  if(!s||s.finishedAt){go("test");return;}
+  // Existing answered question is already included in its round's results.
+  s.currentWordId=null;s.currentUnitId=null;s.currentDirection=null;s.currentAnswered=false;
+  if(!beginNextTestRound(s)){finishTest();return;}
+  const wordId=s.roundQueue.shift();
+  const u=chooseTestSense(testWordUnits(wordId));
+  if(!u){toast("単語データが見つかりません");go("test");return;}
+  testCurrentUnit=u;testAnswered=false;
+  testCurrentDirection=nextTestDirection(s);
+  (s.recentDirections||=[]).push(testCurrentDirection);
+  if(s.recentDirections.length>5)s.recentDirections.shift();
+  s.currentWordId=wordId;s.currentUnitId=u.id;s.currentDirection=testCurrentDirection;
+  persistTest();renderTestQuestion();
+}
+function renderTestHeader(){
+  const s=testStore.active,cleared=s.clearedWordIds.length,total=s.wordIds.length;
+  $("#testQuizCleared").textContent=cleared;$("#testQuizTotal").textContent=total;
+  $("#testQuizBar").style.width=`${total?cleared/total*100:0}%`;
+  $("#testQuizRoundInfo").textContent=`${s.roundNumber}周目 ${s.roundDone}/${s.roundSize}`;
+  $("#testQuizRemaining").textContent=total-cleared;
+  $("#testQuizAccuracy").textContent=s.answers?Math.round(s.correct/s.answers*100)+"%":"—";
+}
+function renderTestQuestion(){
+  const u=testCurrentUnit,s=testStore.active;
+  $("#testQuizWordNo").textContent=`No. ${u.w.id}`;
+  $("#testQuizSenseLabel").textContent=u.count>1?`意味 ${u.index+1}/${u.count}`:"単一意味";
+  $("#testQuizHit").textContent="0 / 1";
+  $("#testDirectionBadge").textContent=testCurrentDirection==="en-ja"?"英 → 日":"日 → 英";
+  const prompt=$("#testQuizPrompt"),speak=$("#testQuizSpeakBtn"),icon=$("#testSpeakIcon");
+  if(testCurrentDirection==="en-ja"){
+    prompt.textContent=u.w.word;prompt.classList.remove("jp");speak.classList.remove("hidden");icon.classList.remove("hidden");
+  }else{
+    prompt.textContent=u.meaning;prompt.classList.add("jp");speak.classList.add("hidden");icon.classList.add("hidden");
+  }
+  $("#testQuizFeedback").className="feedback-strip neutral";
+  $("#testQuizFeedback").textContent="1つ選んでください";
+  $("#nextTestBtn").disabled=true;$("#nextTestBtn").textContent="選択してください";
+  const range=testRangeUnits({start:s.start,end:s.end});
+  const choices=shuffle([u,...distractorsFor(u,testCurrentDirection,range,ALL_UNITS)]);
+  $("#testQuizChoices").replaceChildren();
+  choices.forEach(c=>$("#testQuizChoices").appendChild(makeTestChoice(c,u)));
+  renderTestHeader();
+}
+function makeTestChoice(c,target){
+  const b=document.createElement("button");b.className="choice-card";b.dataset.unit=c.id;
+  const main=document.createElement("div");main.className="choice-main";
+  const reveal=document.createElement("div");reveal.className="choice-reveal";
+  if(testCurrentDirection==="en-ja"){
+    main.textContent=c.meaning;
+    reveal.innerHTML=`<b>${escapeHTML(c.w.word)}</b>${c.count>1?` <span>· 意味${c.index+1}/${c.count}</span>`:""}`;
+  }else{
+    main.textContent=c.w.word;main.classList.add("en","has-audio");
+    const audio=document.createElement("span");audio.className="choice-audio";audio.textContent="🔊";audio.setAttribute("role","button");audio.setAttribute("aria-label",`${c.w.word}を読み上げ`);
+    audio.onclick=e=>{e.stopPropagation();speak(c.w.word);};
+    b.appendChild(audio);reveal.textContent=c.meaning;
+  }
+  b.append(main,reveal);b.onclick=()=>answerTestChoice(b,c.id===target.id);return b;
+}
+function answerTestChoice(chosen,correct){
+  if(testAnswered||!testCurrentUnit)return;
+  const s=testStore.active,u=testCurrentUnit;
+  if(s.currentAnswered)return;
+  testAnswered=true;s.currentAnswered=true;
+  s.answers++;s.roundDone++;
+  if(correct){
+    s.correct++;
+    if(!s.clearedWordIds.includes(u.w.id))s.clearedWordIds.push(u.w.id);
+  }else{
+    s.wrong++;s.mistakes[u.w.id]=(s.mistakes[u.w.id]||0)+1;
+    if(!s.roundMissed.includes(u.w.id))s.roundMissed.push(u.w.id);
+  }
+  persistTest();
+  [...$("#testQuizChoices").children].forEach(b=>{
+    b.disabled=true;b.classList.add("answered");
+    if(b.dataset.unit===u.id)b.classList.add("correct");
+    else if(b===chosen&&!correct)b.classList.add("wrong");
+    else b.classList.add("dim");
+  });
+  const fb=$("#testQuizFeedback");fb.className=`feedback-strip ${correct?"good":"bad"}`;
+  fb.textContent=correct?"✓ 正解！ この単語はテスト完了まで出題しません":"✕ 不正解 · 次の周にもう一度出題します";
+  $("#testQuizHit").textContent=correct?"1 / 1 ✓":"0 / 1";
+  $("#nextTestBtn").disabled=false;
+  const lastInRound=s.roundQueue.length===0;
+  $("#nextTestBtn").textContent=lastInRound?(s.roundMissed.length?"次の周へ":"テスト結果を見る"):"次の問題";
+  renderTestHeader();
+}
+function finishTest(){
+  const s=ensureTestSession(testStore.active);
+  if(s&&!s.finishedAt){s.finishedAt=new Date().toISOString();persistTest();}
+  testCurrentUnit=null;go("test");toast("全問クリア！ テストお疲れさまでした");
+}
+function resetTestOnly(){
+  if(confirm("テスト前モードの途中経過・過去のテスト履歴をすべて削除しますか？\n通常学習の3回正解記録は消えません。")){
+    testStore.active=null;testStore.history=[];testCurrentUnit=null;persistTest();refreshTestView();toast("テスト前の記録のみ削除しました");
+  }
+}
+
 function applyTheme(){
   const dark=settings.theme==="dark"||(settings.theme==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme=dark?"dark":"light";
@@ -441,10 +721,29 @@ function cycleTheme(){ settings.theme=settings.theme==="system"?"light":settings
 
 buildUnits();
 buildRangePreset();
+testPresetBuild();
+testConfigSafe();
 setRandomAccent(false);
 applyTheme();
 refreshHome();
 persist();
+
+$("#testRangeStart").onchange=()=>{saveTestConfigFromUI();};
+$("#testRangeEnd").onchange=()=>{saveTestConfigFromUI();};
+$("#testRangePreset").onchange=e=>{
+  if(e.target.value==="custom")return;
+  const [a,b]=e.target.value.split("-").map(Number);
+  $("#testRangeStart").value=a;$("#testRangeEnd").value=b;saveTestConfigFromUI();refreshTestView();
+};
+$$("#testModeSegment button").forEach(b=>b.onclick=()=>{
+  testStore.config.mode=b.dataset.testMode;persistTest();refreshTestView();
+});
+$("#createTestBtn").onclick=createTest;
+$("#resumeTestBtn").onclick=openTestQuiz;
+$("#nextTestBtn").onclick=()=>{if(!$("#nextTestBtn").disabled)nextTestQuestion();};
+$("#testQuizSpeakBtn").onclick=()=>speak(testCurrentUnit?.w.word||"");
+$("#testSpeakIcon").onclick=()=>speak(testCurrentUnit?.w.word||"");
+$("#resetTestBtn").onclick=resetTestOnly;
 
 $("#rangeStart").onchange=()=>changeRange($("#rangeStart").value,$("#rangeEnd").value);
 $("#rangeEnd").onchange=()=>changeRange($("#rangeStart").value,$("#rangeEnd").value);

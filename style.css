@@ -93,3 +93,39 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(va
 }
 @media(min-width:640px){main{padding-left:24px;padding-right:24px}.topbar{padding-left:28px;padding-right:28px}.quiz-panel{padding:16px}}
 @media(max-height:720px){html.pwa-standalone .mission-shell{padding-top:7px}}
+
+
+/* v3 · Separate one-hit exam preparation */
+.bottom-nav.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.bottom-nav.four button{min-width:0;white-space:nowrap}
+.test-intro .section-head{align-items:center}
+.test-description{font-size:13px;line-height:1.75;color:var(--muted);margin:0}
+.test-description b{color:var(--text)}
+.test-availability{margin:10px 0 14px;padding:11px 12px;background:rgba(var(--accent-rgb),.08);border-radius:12px;font-size:12px;font-weight:750}
+.test-mode-label{margin:20px 0 8px}
+.test-create-btn{margin-top:18px}
+.test-progress-hero{display:flex;align-items:center;gap:12px;margin:15px 0}
+.test-progress-hero strong{font-size:27px;min-width:70px}
+.test-progress-hero .bar{flex:1;margin:0;height:11px}
+.test-stats{margin:12px 0}
+#resumeTestBtn{margin-top:15px}
+.test-history{display:grid;gap:9px}
+.test-history-item{background:var(--surface2);padding:12px 14px;border-radius:14px;display:grid;gap:7px}
+.test-history-top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.test-history-top b{font-size:13px}
+.test-history-top span,.test-history-info{font-size:11px;color:var(--muted);line-height:1.5}
+.test-history-item .bar{margin:0}
+.test-reset{margin-top:16px;width:100%;font-size:12px}
+#testQuizView .quiz-panel{grid-template-rows:auto minmax(88px,.78fr) minmax(0,2.2fr) auto 48px}
+@media(max-width:520px){
+  .test-intro .section-head{flex-wrap:wrap}
+}
+@media(max-height:720px){#testQuizView .quiz-panel{grid-template-rows:auto minmax(65px,.6fr) minmax(0,2.3fr) auto 43px}}
+
+/* Exam range now controls the exact number of distinct words. */
+.test-meaning-policy{margin:8px 2px 0;font-size:13px;line-height:1.7}
+.test-meaning-policy strong{color:var(--text)}
+
+/* Shrinking-round review tracker, compact in the iPhone/PWA quiz footer. */
+.test-round-history{margin:8px 0 0;color:var(--muted);line-height:1.6;overflow-wrap:anywhere}
+#testQuizRoundInfo{font-size:12px;white-space:nowrap}

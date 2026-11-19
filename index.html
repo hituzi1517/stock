@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Vocab 1528+">
-  <title>Vocab 1528+</title>
+  <title>Vocab 1528+｜テスト前モード（単語単位）</title>
   <script>
     if ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true) {
       document.documentElement.classList.add("pwa-standalone");
@@ -172,6 +172,89 @@
       </div>
     </section>
 
+    <!-- 通常学習の3回クリアとは独立した、テスト前の1回正解クリア -->
+    <section class="view" id="testView">
+      <div class="card section-card test-intro">
+        <div class="section-head"><div><div class="eyebrow">EXAM PREP · ONE HIT CLEAR</div><h3>テスト前チェック</h3></div><span class="accent-chip">独立記録</span></div>
+        <p class="test-description">指定範囲を<b>全問1周</b>し、<b>不正解の単語だけで次の周</b>を行います。1回正解すればクリア。問題数は周を追うごとに減っていきます。通常学習の3回正解記録には影響しません。</p>
+      </div>
+
+      <div class="card section-card hidden" id="testCurrentPanel">
+        <div class="section-head compact-head"><div><div class="eyebrow">CURRENT TEST</div><h3 id="testCurrentTitle">テストの続き</h3></div><span class="status-pill" id="testStateTag">進行中</span></div>
+        <p class="tiny test-description" id="testCurrentInfo"></p>
+        <div class="test-progress-hero"><strong id="testCurrentPct">0%</strong><div class="bar tall"><i id="testCurrentBar"></i></div></div>
+        <div class="big-stats test-stats">
+          <div><b id="testCleared">0</b><span>クリア</span></div>
+          <div><b id="testLeft">0</b><span>残り</span></div>
+          <div><b id="testWrong">0</b><span>誤答</span></div>
+        </div>
+        <p class="tiny" id="testCurrentAccuracy"></p>
+        <p class="tiny test-round-history" id="testRoundHistory"></p>
+        <button class="primary giant" id="resumeTestBtn">テストを再開する</button>
+      </div>
+
+      <div class="card section-card">
+        <div class="section-head"><div><div class="eyebrow">NEW TEST</div><h3>新しいテストを作成</h3></div></div>
+        <label class="preset-label">出題する範囲
+          <select id="testRangePreset"></select>
+        </label>
+        <div class="range-grid">
+          <label>開始番号<input id="testRangeStart" type="number" min="1" max="1528" inputmode="numeric"></label>
+          <div class="range-sep">–</div>
+          <label>終了番号<input id="testRangeEnd" type="number" min="1" max="1528" inputmode="numeric"></label>
+        </div>
+        <p class="test-availability" id="testAvailableLabel" aria-live="polite">この範囲の問題数: —</p>
+        <p class="tiny test-meaning-policy">複数の意味がある単語は<strong>出題のたびに意味を再抽選</strong>します（1番目の意味を約70%優先）。1周の中では各単語は1回だけ出題されます。</p>
+        <label class="preset-label test-mode-label">出題方向</label>
+        <div class="segmented" id="testModeSegment">
+          <button type="button" data-test-mode="en-ja">英 → 日</button>
+          <button type="button" data-test-mode="ja-en">日 → 英</button>
+          <button type="button" data-test-mode="mixed" class="active">ごちゃまぜ</button>
+        </div>
+        <button class="primary giant test-create-btn" id="createTestBtn">この範囲でテスト開始</button>
+        <p class="tiny">1周目は指定範囲の全単語を出題。2周目以降は前の周で間違えた単語だけを出題します。</p>
+      </div>
+
+      <div class="card section-card">
+        <div class="section-head"><div><div class="eyebrow">SEPARATE HISTORY</div><h3>テスト前の記録</h3></div></div>
+        <div id="testHistory" class="test-history"></div>
+        <button class="danger ghost test-reset" id="resetTestBtn">テスト前の記録だけ消去</button>
+        <p class="tiny">通常学習の履歴は消えません。テスト前の記録もJSONバックアップに含まれます。</p>
+      </div>
+    </section>
+
+    <section class="view mission-overlay" id="testQuizView">
+      <div class="mission-shell">
+        <div class="mission-head">
+          <button class="back-btn" data-go="test" aria-label="テスト前に戻る">‹</button>
+          <div class="mission-meter">
+            <div><span id="testDirectionBadge" class="direction-badge">英 → 日</span> テスト <b><span id="testQuizCleared">0</span>/<span id="testQuizTotal">300</span></b></div>
+            <div class="bar"><i id="testQuizBar"></i></div>
+          </div>
+          <button class="icon-btn" id="testSpeakIcon" aria-label="英語の発音を聞く">🔊</button>
+        </div>
+        <div class="quiz-panel card">
+          <div class="question-row">
+            <span id="testQuizWordNo">No. 1</span>
+            <span id="testQuizSenseLabel"></span>
+            <span class="hit-pill" id="testQuizHit">未クリア</span>
+          </div>
+          <div class="prompt-zone">
+            <div class="quiz-prompt" id="testQuizPrompt">word</div>
+            <button class="speak-btn" id="testQuizSpeakBtn">🔊 読み上げ</button>
+          </div>
+          <div id="testQuizChoices" class="choices-grid"></div>
+          <div id="testQuizFeedback" class="feedback-strip neutral">1つ選んでください</div>
+          <button class="primary next-fixed" id="nextTestBtn" disabled>選択してください</button>
+        </div>
+        <div class="mission-foot">
+          <span><b id="testQuizRoundInfo">1周目 0/300</b></span>
+          <span>残り <b id="testQuizRemaining">300</b></span>
+          <span>正答率 <b id="testQuizAccuracy">—</b></span>
+        </div>
+      </div>
+    </section>
+
     <section class="view" id="searchView">
       <div class="search-box card"><input id="searchInput" type="search" placeholder="英単語・日本語で検索"></div>
       <div id="searchResults" class="word-list"></div>
@@ -208,8 +291,9 @@
     </section>
   </main>
 
-  <nav class="bottom-nav three">
+  <nav class="bottom-nav four">
     <button data-view="home" class="active"><span>⌂</span>学習</button>
+    <button data-view="test"><span>✎</span>テスト前</button>
     <button data-view="search"><span>⌕</span>単語一覧</button>
     <button data-view="stats"><span>≡</span>記録</button>
   </nav>
