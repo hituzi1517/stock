@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Vocab 1528+">
-  <title>Vocab 1528+｜テスト前モード（単語単位）</title>
+  <title>Vocab 1528+｜テスト前・重複なし周回 v6</title>
   <script>
     if ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true) {
       document.documentElement.classList.add("pwa-standalone");
@@ -16,7 +16,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=6-once-per-round">
 </head>
 <body>
 <div id="app">
@@ -175,13 +175,14 @@
     <!-- 通常学習の3回クリアとは独立した、テスト前の1回正解クリア -->
     <section class="view" id="testView">
       <div class="card section-card test-intro">
-        <div class="section-head"><div><div class="eyebrow">EXAM PREP · ONE HIT CLEAR</div><h3>テスト前チェック</h3></div><span class="accent-chip">独立記録</span></div>
-        <p class="test-description">指定範囲を<b>全問1周</b>し、<b>不正解の単語だけで次の周</b>を行います。1回正解すればクリア。問題数は周を追うごとに減っていきます。通常学習の3回正解記録には影響しません。</p>
+        <div class="section-head"><div><div class="eyebrow">EXAM PREP · v6 NO REPEATS</div><h3>テスト前チェック</h3></div><span class="accent-chip">独立記録</span></div>
+        <p class="test-description">指定範囲を<b>全問1周</b>し、<b>不正解の単語だけで次の周</b>を行います。不正解でもその周の出題済みとして数え、同じ周では二度出しません。1回正解すればクリア。問題数は周を追うごとに減っていきます。通常学習の3回正解記録には影響しません。</p>
       </div>
 
       <div class="card section-card hidden" id="testCurrentPanel">
         <div class="section-head compact-head"><div><div class="eyebrow">CURRENT TEST</div><h3 id="testCurrentTitle">テストの続き</h3></div><span class="status-pill" id="testStateTag">進行中</span></div>
         <p class="tiny test-description" id="testCurrentInfo"></p>
+        <p class="tiny hidden" id="testLegacyNotice">※ このテストは以前の方式から引き継いだものです。厳密に「最初の周が指定範囲の全問」になるよう確認するには、新しいテストを作成してください。通常学習の記録は消えません。</p>
         <div class="test-progress-hero"><strong id="testCurrentPct">0%</strong><div class="bar tall"><i id="testCurrentBar"></i></div></div>
         <div class="big-stats test-stats">
           <div><b id="testCleared">0</b><span>クリア</span></div>
@@ -204,7 +205,7 @@
           <label>終了番号<input id="testRangeEnd" type="number" min="1" max="1528" inputmode="numeric"></label>
         </div>
         <p class="test-availability" id="testAvailableLabel" aria-live="polite">この範囲の問題数: —</p>
-        <p class="tiny test-meaning-policy">複数の意味がある単語は<strong>出題のたびに意味を再抽選</strong>します（1番目の意味を約70%優先）。1周の中では各単語は1回だけ出題されます。</p>
+        <p class="tiny test-meaning-policy">複数の意味がある単語は<strong>出題のたびに意味を再抽選</strong>します（1番目の意味を約70%優先）。1周の中では各単語は正誤に関係なく1回だけ出題されます。</p>
         <label class="preset-label test-mode-label">出題方向</label>
         <div class="segmented" id="testModeSegment">
           <button type="button" data-test-mode="en-ja">英 → 日</button>
@@ -228,7 +229,7 @@
         <div class="mission-head">
           <button class="back-btn" data-go="test" aria-label="テスト前に戻る">‹</button>
           <div class="mission-meter">
-            <div><span id="testDirectionBadge" class="direction-badge">英 → 日</span> テスト <b><span id="testQuizCleared">0</span>/<span id="testQuizTotal">300</span></b></div>
+            <div><span id="testDirectionBadge" class="direction-badge">英 → 日</span> <span id="testTopRoundLabel">1周目</span> <b><span id="testQuizCleared">0</span>/<span id="testQuizTotal">300</span></b></div>
             <div class="bar"><i id="testQuizBar"></i></div>
           </div>
           <button class="icon-btn" id="testSpeakIcon" aria-label="英語の発音を聞く">🔊</button>
@@ -300,6 +301,6 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="words.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=6-once-per-round"></script>
 </body>
 </html>

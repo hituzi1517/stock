@@ -447,12 +447,12 @@ function resetProgress(){
   }
 }
 
-// --------------------- Test preparation: shrinking rounds ---------------------
-// Every No. in the selected range is asked once per round. A correct answer
-// permanently clears that No. for the current test. Only misses enter the next
-// round. Select one meaning afresh for EACH appearance (first meaning: 70%).
-// The complete current round and unanswered question are persisted separately
-// from normal 3-hit vocabulary study.
+// --------------------- Test preparation v6: exactly once per No. per round ---------------------
+// Each round has an immutable shuffled order of distinct word IDs.  A word is
+// answered at most once in that round, irrespective of right/wrong.  Misses are
+// recorded for the *next* round, never returned to the current round's queue.
+// A fresh sense is drawn on every new appearance, favoring sense #1 (70%).
+const TEST_ENGINE_VERSION = 6;
 function persistTest(){
   try{localStorage.setItem(TEST_KEY,JSON.stringify(testStore));}
   catch(e){toast("保存容量が不足しています。バックアップをご利用ください");}
@@ -468,22 +468,60 @@ function testConfigSafe(){
 function testRangeUnits(c=testConfigSafe()){
   return ALL_UNITS.filter(u=>u.w.id>=c.start&&u.w.id<=c.end);
 }
-function testClearedSet(session=testStore.active){return new Set(session?.clearedWordIds||[]);}
-// Convert an unfinished v3/v4 test without discarding its cleared words or
-// accuracy totals. Previously presented-but-uncleared words begin in one queue.
+function testWordUnits(wordId){return ALL_UNITS.filter(u=>u.w.id===wordId);}
+function uniqueValidWordIds(xs){
+  return [...new Set((Array.isArray(xs)?xs:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=MAX_WORD_ID))];
+}
+// Older versions did not record a complete, non-repeating order. Preserve the
+// current v5 pending items and already counted answers; for v3/v4 preserve
+// already-cleared words and start a fresh round of the remaining ones.
 function ensureTestSession(s){
-  if(!s||s.selectionType==="rounds-per-word")return s;
-  const ids=Array.isArray(s.unitIds)?s.unitIds:[];
-  const wordIds=[...new Set(ids.map(x=>Number.parseInt(String(x).split(":")[0],10)).filter(id=>Number.isInteger(id)&&id>=1&&id<=MAX_WORD_ID))];
-  const cleared=new Set((s.clearedIds||[]).map(x=>Number.parseInt(String(x).split(":")[0],10)));
-  s.wordIds=wordIds;
-  s.clearedWordIds=wordIds.filter(id=>cleared.has(id));
-  s.roundQueue=shuffle(wordIds.filter(id=>!cleared.has(id)));
-  s.roundMissed=[];s.roundNumber=1;s.roundSize=s.roundQueue.length;
-  s.roundDone=0;s.roundHistory=[];
+  if(!s)return s;
+  if(s.selectionType==="once-per-round-v6")return s;
+  const previous=s.selectionType;
+  if(previous==="rounds-per-word"){
+    const ids=uniqueValidWordIds(s.wordIds);
+    const cleared=new Set(uniqueValidWordIds(s.clearedWordIds));
+    const pending=[];
+    if(s.currentWordId!=null && !s.currentAnswered)pending.push(Number(s.currentWordId));
+    pending.push(...(Array.isArray(s.roundQueue)?s.roundQueue:[]).map(Number));
+    const order=[...new Set(pending)].filter(id=>ids.includes(id)&&!cleared.has(id));
+    s.wordIds=ids;
+    s.clearedWordIds=ids.filter(id=>cleared.has(id));
+    s.roundOrder=order;
+    s.roundIndex=0;
+    s.roundDone=Math.max(0,Number(s.roundDone)||0);
+    s.roundSize=s.roundDone+order.length;
+    s.roundMissed=uniqueValidWordIds(s.roundMissed).filter(id=>ids.includes(id));
+    s.roundAnsweredIds=[...s.roundMissed];
+    s.roundHistory=Array.isArray(s.roundHistory)?s.roundHistory:[];
+    s.roundNumber=Math.max(1,Number(s.roundNumber)||1);
+    s.migratedFromOlderTest=true;
+  }else{
+    const originalIds=(Array.isArray(s.unitIds)?s.unitIds:[]).map(x=>Number.parseInt(String(x).split(":")[0],10));
+    const ids=uniqueValidWordIds(originalIds);
+    const cleared=new Set((Array.isArray(s.clearedIds)?s.clearedIds:[]).map(x=>Number.parseInt(String(x).split(":")[0],10)));
+    const pending=ids.filter(id=>!cleared.has(id));
+    s.wordIds=ids;
+    s.clearedWordIds=ids.filter(id=>cleared.has(id));
+    s.roundNumber=1;
+    s.roundOrder=shuffle(pending);
+    s.roundIndex=0;
+    s.roundDone=0;
+    s.roundSize=pending.length;
+    s.roundMissed=[];
+    s.roundAnsweredIds=[];
+    s.roundHistory=[];
+    s.migratedFromOlderTest=true;
+  }
+  s.answers=Number(s.answers)||0;
+  s.correct=Number(s.correct)||0;
+  s.wrong=Number(s.wrong)||0;
+  if(!s.mistakes||typeof s.mistakes!=="object")s.mistakes={};
+  if(!Array.isArray(s.recentDirections))s.recentDirections=[];
   s.currentWordId=null;s.currentUnitId=null;s.currentDirection=null;s.currentAnswered=false;
-  s.selectionType="rounds-per-word";
-  s.migratedFromOlderTest=true;
+  s.selectionType="once-per-round-v6";
+  s.testEngineVersion=TEST_ENGINE_VERSION;
   persistTest();
   return s;
 }
@@ -491,8 +529,8 @@ function testSummary(session){
   const total=(session.wordIds||session.unitIds||[]).length;
   const cleared=(session.clearedWordIds||session.clearedIds||[]).length;
   return {id:session.id,createdAt:session.createdAt,finishedAt:session.finishedAt||null,abandonedAt:session.abandonedAt||null,
-    selectionType:session.selectionType||"legacy-meaning-sample",
-    start:session.start,end:session.end,mode:session.mode,total,cleared,
+    selectionType:session.selectionType||"legacy-meaning-sample",start:session.start,end:session.end,mode:session.mode,total,cleared,
+    migratedFromOlderTest:!!session.migratedFromOlderTest,
     roundNumber:session.roundNumber||null,roundSize:session.roundSize||null,roundDone:session.roundDone||0,
     roundHistory:Array.isArray(session.roundHistory)?session.roundHistory:[],
     correct:session.correct||0,wrong:session.wrong||0,
@@ -508,17 +546,15 @@ function testPreview(){
         b=clamp(Number.parseInt($("#testRangeEnd").value)||MAX_WORD_ID,1,MAX_WORD_ID);
   const start=Math.min(a,b),end=Math.max(a,b);
   const total=WORDS.filter(w=>w.id>=start&&w.id<=end).length;
-  $("#testAvailableLabel").textContent=`No. ${start}–${end} · 1周目 ${total.toLocaleString()}問（以後は不正解だけ）`;
+  $("#testAvailableLabel").textContent=`No. ${start}–${end} · 1周目は重複なしで ${total.toLocaleString()}問（不正解は次の周へ）`;
   const key=`${start}-${end}`;
   $("#testRangePreset").value=[...$("#testRangePreset").options].some(x=>x.value===key)?key:"custom";
 }
-// Called every time the word is about to appear, including on a later round.
 function chooseTestSense(units){
   if(!units.length)return null;
-  if(units.length===1||Math.random()<0.70)return units[0];
+  if(units.length===1||Math.random()<.70)return units[0];
   return units[1+Math.floor(Math.random()*(units.length-1))];
 }
-function testWordUnits(wordId){return ALL_UNITS.filter(u=>u.w.id===wordId);}
 function refreshTestView(){
   const c=testConfigSafe(),s=ensureTestSession(testStore.active);
   $("#testRangeStart").value=c.start;$("#testRangeEnd").value=c.end;
@@ -536,9 +572,11 @@ function refreshTestView(){
     const roundMsg=sum.finishedAt?`${sum.roundNumber||1}周で全問クリア`:`第${sum.roundNumber||1}周 · ${sum.roundDone||0}/${sum.roundSize||0}問 回答済み`;
     $("#testCurrentAccuracy").textContent=`${roundMsg} · 累計回答 ${sum.correct+sum.wrong}回 · 正答率 ${sum.accuracy==null?"—":sum.accuracy+"%"}`;
     $("#testRoundHistory").textContent=(sum.roundHistory||[]).length?
-      `周回の記録：${sum.roundHistory.map(x=>`${x.number}周目 ${x.total}問 → 不正解${x.missed}問`).join(" ／ ")}`:"1周目は指定した範囲の全単語を1回ずつ出題します。";
+      `周回の記録：${sum.roundHistory.map(x=>`${x.number}周目 ${x.total}問 → 不正解${x.missed}問`).join(" ／ ")}`:
+      "1周目は指定範囲の全単語を重複なしで1回ずつ出題します。";
+    const warning=$("#testLegacyNotice");warning.classList.toggle("hidden",!sum.migratedFromOlderTest);
     $("#resumeTestBtn").classList.toggle("hidden",!!sum.finishedAt);
-    $("#resumeTestBtn").textContent=`残り${sum.total-sum.cleared}問 · 続きから学習する`;
+    $("#resumeTestBtn").textContent=`第${sum.roundNumber||1}周の続きから再開する`;
   }
   const all=[];if(s)all.push(testSummary(s));all.push(...testStore.history);
   $("#testHistory").innerHTML=all.length?all.slice(0,12).map((t,i)=>{
@@ -568,13 +606,13 @@ function createTest(){
   }
   testStore.active={
     id:`${Date.now()}-${Math.floor(Math.random()*1e6)}`,
-    start:c.start,end:c.end,mode:c.mode,selectionType:"rounds-per-word",
+    start:c.start,end:c.end,mode:c.mode,selectionType:"once-per-round-v6",testEngineVersion:TEST_ENGINE_VERSION,
     createdAt:new Date().toISOString(),finishedAt:null,
     wordIds:ids,clearedWordIds:[],answers:0,correct:0,wrong:0,mistakes:{},
     roundNumber:1,roundSize:ids.length,roundDone:0,
-    roundQueue:shuffle(ids),roundMissed:[],roundHistory:[],
+    roundOrder:shuffle(ids),roundIndex:0,roundMissed:[],roundAnsweredIds:[],roundHistory:[],
     currentWordId:null,currentUnitId:null,currentDirection:null,currentAnswered:false,
-    recentDirections:[]
+    recentDirections:[],migratedFromOlderTest:false
   };
   persistTest();openTestQuiz();
 }
@@ -583,7 +621,8 @@ function openTestQuiz(){
   if(!s){toast("先にテストを作成してください");return;}
   if(s.finishedAt){go("test");return;}
   go("testQuiz");
-  // Reopen an unanswered question without counting it twice or rerolling it.
+  // On reload, keep an unanswered question; a previously answered question
+  // advances without a second count (answers must never be double-counted).
   if(s.currentWordId!=null&&!s.currentAnswered&&unitById.has(s.currentUnitId)){
     testCurrentUnit=unitById.get(s.currentUnitId);
     testCurrentDirection=s.currentDirection||"en-ja";testAnswered=false;
@@ -599,29 +638,49 @@ function nextTestDirection(s){
   return Math.random()<.5?"en-ja":"ja-en";
 }
 function beginNextTestRound(s){
-  if(s.roundQueue.length)return true;
-  // One round ends only when every selected No. has had one answer.
-  if(s.roundDone>0){
-    const misses=s.roundMissed.length;
-    s.roundHistory.push({number:s.roundNumber,total:s.roundSize,missed:misses});
-    if(s.roundHistory.length>30)s.roundHistory=s.roundHistory.slice(-30);
-  }
-  if(!s.roundMissed.length)return false;
+  if(s.roundDone < s.roundSize)return true;
+  // The just-completed round is archived BEFORE clearing its mistake list.
+  const missed=[...new Set(s.roundMissed)];
+  s.roundHistory.push({number:s.roundNumber,total:s.roundSize,correct:s.roundSize-missed.length,
+    missed:missed.length,wrongIds:[...missed]});
+  if(s.roundHistory.length>30)s.roundHistory=s.roundHistory.slice(-30);
+  if(missed.length===0){persistTest();return false;}
   s.roundNumber++;
-  s.roundQueue=shuffle(s.roundMissed);
-  s.roundSize=s.roundQueue.length;
-  s.roundDone=0;s.roundMissed=[];
+  s.roundOrder=shuffle(missed);
+  s.roundIndex=0;
+  s.roundSize=missed.length;
+  s.roundDone=0;
+  s.roundMissed=[];
+  s.roundAnsweredIds=[];
   persistTest();return true;
 }
 function nextTestQuestion(){
   const s=ensureTestSession(testStore.active);
   if(!s||s.finishedAt){go("test");return;}
-  // Existing answered question is already included in its round's results.
+  // Do not let a user skip an unanswered No. (including a double tap).
+  if(s.currentWordId!=null&&!s.currentAnswered){
+    if(unitById.has(s.currentUnitId)){
+      testCurrentUnit=unitById.get(s.currentUnitId);
+      testCurrentDirection=s.currentDirection||"en-ja";testAnswered=false;
+      renderTestQuestion();return;
+    }
+  }
   s.currentWordId=null;s.currentUnitId=null;s.currentDirection=null;s.currentAnswered=false;
   if(!beginNextTestRound(s)){finishTest();return;}
-  const wordId=s.roundQueue.shift();
+  // roundOrder was fixed when the round began, never recomputed by correctness.
+  // A fresh No. always comes from the next unused position in this order.
+  const wordId=s.roundOrder[s.roundIndex];
+  if(!Number.isInteger(wordId)){
+    toast("テストの出題順を確認できません。進捗を保存して一覧へ戻ります");
+    persistTest();go("test");return;
+  }
+  if(s.roundAnsweredIds.includes(wordId)){
+    toast("重複出題を検知したため、この問題をスキップします");
+    s.roundIndex++;persistTest();nextTestQuestion();return;
+  }
   const u=chooseTestSense(testWordUnits(wordId));
   if(!u){toast("単語データが見つかりません");go("test");return;}
+  s.roundIndex++;
   testCurrentUnit=u;testAnswered=false;
   testCurrentDirection=nextTestDirection(s);
   (s.recentDirections||=[]).push(testCurrentDirection);
@@ -631,8 +690,11 @@ function nextTestQuestion(){
 }
 function renderTestHeader(){
   const s=testStore.active,cleared=s.clearedWordIds.length,total=s.wordIds.length;
-  $("#testQuizCleared").textContent=cleared;$("#testQuizTotal").textContent=total;
-  $("#testQuizBar").style.width=`${total?cleared/total*100:0}%`;
+  // Top meter is THIS ROUND'S answered count, not lifetime clear count.
+  // Wrong answers also fill this meter and never return in the same round.
+  $("#testTopRoundLabel").textContent=`${s.roundNumber}周目`;
+  $("#testQuizCleared").textContent=s.roundDone;$("#testQuizTotal").textContent=s.roundSize;
+  $("#testQuizBar").style.width=`${s.roundSize?s.roundDone/s.roundSize*100:0}%`;
   $("#testQuizRoundInfo").textContent=`${s.roundNumber}周目 ${s.roundDone}/${s.roundSize}`;
   $("#testQuizRemaining").textContent=total-cleared;
   $("#testQuizAccuracy").textContent=s.answers?Math.round(s.correct/s.answers*100)+"%":"—";
@@ -676,8 +738,11 @@ function makeTestChoice(c,target){
 function answerTestChoice(chosen,correct){
   if(testAnswered||!testCurrentUnit)return;
   const s=testStore.active,u=testCurrentUnit;
-  if(s.currentAnswered)return;
+  if(!s||s.currentAnswered)return;
+  if(s.roundAnsweredIds.includes(u.w.id))return;
   testAnswered=true;s.currentAnswered=true;
+  // One answer, one No., one slot in this round: WRONG also advances the count.
+  s.roundAnsweredIds.push(u.w.id);
   s.answers++;s.roundDone++;
   if(correct){
     s.correct++;
@@ -694,11 +759,11 @@ function answerTestChoice(chosen,correct){
     else b.classList.add("dim");
   });
   const fb=$("#testQuizFeedback");fb.className=`feedback-strip ${correct?"good":"bad"}`;
-  fb.textContent=correct?"✓ 正解！ この単語はテスト完了まで出題しません":"✕ 不正解 · 次の周にもう一度出題します";
+  fb.textContent=correct?"✓ 正解！ この単語はテスト完了まで出題しません":"✕ 不正解 · 今の周では出ず、次の周で再挑戦します";
   $("#testQuizHit").textContent=correct?"1 / 1 ✓":"0 / 1";
   $("#nextTestBtn").disabled=false;
-  const lastInRound=s.roundQueue.length===0;
-  $("#nextTestBtn").textContent=lastInRound?(s.roundMissed.length?"次の周へ":"テスト結果を見る"):"次の問題";
+  const lastInRound=s.roundDone===s.roundSize;
+  $("#nextTestBtn").textContent=lastInRound?(s.roundMissed.length?`${s.roundNumber}周目終了 → ${s.roundNumber+1}周目へ`:`${s.roundNumber}周目終了 → 結果を見る`):"次の問題";
   renderTestHeader();
 }
 function finishTest(){
@@ -767,4 +832,4 @@ if(window.visualViewport&&!IS_STANDALONE){
   window.visualViewport.addEventListener("resize",scheduleViewportSync,{passive:true});
   window.visualViewport.addEventListener("scroll",scheduleViewportSync,{passive:true});
 }
-if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=6-once-per-round").catch(()=>{}));
